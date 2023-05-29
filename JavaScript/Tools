@@ -1,0 +1,18 @@
+```
+const debounce = function(fn, wait = 800, immediate = true) {
+  let timer
+  const delayFunction = function (...args) {
+    let callNow = immediate && !timer
+    if(callNow) fn.apply(this, args)
+    if(timer) clearTimeout(timer)
+    timer = setTimeout(() => {
+      immediate ? timer = null : fn.apply(this, args)
+    }, wait)
+  }
+  delayFunction.cancel = function() {
+    clearTimeout(timer)
+    timer = null
+  }
+  return delayFunction
+}
+```
