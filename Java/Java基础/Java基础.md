@@ -1077,11 +1077,673 @@ public @interface MyMethodAnnotation {
 // 使用注解
 public class TestMethodAnnotation {
   @Override
-  @My
+  @MyMethodAnnotation(title = "toStringMethod", description="ovverride toString method")
+  public String toString() {
+    return "Override toString method"
+  }
+  
+  @Desprecated
+  @MyMethodAnnotation(title = "old static method", description="deprecated old static method")
+  public static void oldMethod(){
+    System.out.println("old method don't use it");
+  }
+  
+  @SuppressWarnings({"unchecked", "deprecation"})
+  @MyMethodAnnotation(title = "test method", description="suppres warning static method")
+  public static void genericsTest() throws FileNotFoundException 「
+    List l = new ArrayList();
+  	l.add("abc");
+    oldMethod();
 }
 ```
 
 
 
+* 用反射接口获取注解信息
 
+在TestMethodAnnotation中添加main方法进行测试：
+
+```java
+public static void main(String[] args) {
+  try {
+    // 获取所有method
+    Method[] methods = TestMethodAnnotation.class.getClassLoader()
+      .loadClass(("com.rookie.java.annotation.TestMethodAnnotation"))
+      .getMethods();
+    
+    // 遍历
+    for(Method method : methods) {
+      // 方法上是否有MyMethodAnnotation注解
+      if(method.isAnnotationPresent(MyMethodAnnotation.class)) {
+       	try {
+          // 获取遍历方法上所有的注解
+          for(Annotation anno : method.getDeclareAnnotations()) {
+            System.out.println("Annotation in method" + method + "" + anno);
+          }
+          
+          // 获取MyMethodAnnotation对象信息
+          MyMethodAnnotation methodAnno = method.getAnnotation(MyMethodAnnotation.class);
+          
+          System.out.println(methodAnno.title());
+          
+        } catch(Throwable ex) {
+          ex.printStackTrace();
+        }
+        
+      }
+    }
+  } catch (SecurityException | ClassNotFoundException e) {
+    e.printStackTrace();
+  }
+}
+```
+
+
+
+#### 深入理解注解
+
+#### Java8 提供了哪些心注解
+
+* `ElementType.TYPE_PARAMETER`
+
+`ElementType.TYPE_USE`(此类型包括类型声明和类型参数声明，是为了方便设计者进行检查)包含了`ElementType.TYPE`（类、接口（包括注解类型）和枚举的声明）和`ElementType.TYPE_PARAMETER`
+
+```java
+// 自定义ElementType.TYPE_PARAMETER注解
+@Retention(RetentionPolicy.RUNTIME)
+@Target(ELementType.TYPE_PARAMETER)
+public @interface MyNotEmpty {
+  
+}
+// 自定义ElementType.TYPE_USE注解
+@Retention(RetentionPolicy.RUNTIME)
+@Target(ElementType.TYPE_USE)
+public @interface MyNotNull {}
+
+// 测试类
+public class TypeParameterAndTypeUseAnnotation<@MyNotEmpty T> {
+  
+  /*
+  * 使用TYPE_PARAMER类型，会编译不通过
+  * public @MyNotEmpty T test(@MyNotEmpty T a) {
+  * new ArrayList<@MyNotEmpty String>();
+  * return a;
+  * }
+  **/
+  
+  // 使用TYPE_USE类型，编译通过
+  
+  public @MyNotNull T test2(@MyNotNull T a) {
+    new ArrayList<@MyNotNull String>();
+    return a;
+  }
+} 
+
+```
+
+
+
+
+
+####  自定义注解和AOP-通过切面实现解耦
+
+> 最为常见的就是Spring AOP切面实现统一的操作日志管理
+
+* 自定义Log注解
+
+```java
+@Target({ELementType.PARAMER, ElementType.METHOD})
+@Retention(RetentionPolicy.RUNTIME)
+@Documented
+public @interface Log {
+  /**
+   * 模块
+   */
+  public String title() default "";
+  
+  /**
+   * 功能
+   */
+  public BusinessType businessType() default BusinessType.OTHER;
+  
+  /**
+   * 操作人类别
+   */
+  public OperateorType operatorType() default OperatorType.MANAGE;
+  
+  /**
+   * 是否保存请求的参数
+   */
+  public boolean isSaveRequestData() default true;
+}
+
+```
+
+
+
+* 实现日志的切面，对自定义注解Log做切点进行拦截
+
+即对注解了@Log的方法进行切点拦截
+
+```java
+@Aspect
+@Component
+public class LogAspect {
+  private static final Logger log = LoggerFactory.getLogger(LogAspect.class);
+  
+  /**
+   * 配置切入点 - 自定义注解的包路径
+   *
+   */
+  @Pointcut("@annotation(com.xxx.aspectj.lang.annotation.Log)")
+  public void logPointCut() {}
+  
+  /*
+   * 处理完请求后执行
+   * 
+   * @param joinPoint 切点
+   */
+  @AfterReturning(pointcut = "logPointCut()", returning= "jsonResult")
+  public void doAfterRetruning(JoinPoint joinPointm Object jsonResult) {
+    handleLog(joinPoint, null, jsonResult);
+  }
+  
+  /**
+   * 拦截异常操作
+   * 
+   * @param joinPoint 切点
+   * @param e 异常
+   */
+  @AfterThrowing(value = "logPointCut()", throwing = "e")
+  public void doAfterThrowing(JoinPoint joinPoint, Exception e) {
+    handleLog(joinPoint, e, null);
+  }
+  
+  protected void handleLog(final JoinPoint joinPoint, final Exception e, Object jsonResult) {
+    try {
+      // 获得注解
+      Log controllerLog = getAnnotationLog(joinPoint);
+      if(controllerLog == null) {
+        return;
+      }
+      
+      // 获取当前的用户
+      User currentUser = ShiroUtils.getSysUser();
+      
+      // 数据库日志
+      OperLog operLog = new OperLog();
+      OperLog.setStatus(BusinessStatus.SUCCESS.ordinal());
+      // 请求的地址
+      String ip = ShiroUtils.getIp();
+      operLog.setOperIp(ip);
+      // 返回参数
+      operLog.setJsonResult(JSONObject.toJSONString(jsonResult));
+      
+      operLog.setOperUlr(ServletUtils.getRequest().getRequestURI());
+      if(currentUser != null) {
+        operLog.setOperName(currentUser.getLoginName())
+          if(StringUtils.isNotNull(currentUser.getDept())
+             && StringUtils.isNotEmpty(currentUser.getDetpt().getDeptName())) {
+            operLog.setDeptName(currentUser.getDept().getDeptName());
+          }
+      }
+      if ( e != null) {
+        operLog.setStatus(BusinessStatus.FAIL.ordinal());
+        operLog.setErrorMsg(StringUtils.substring(e.getMessage(),0, 2000));
+      }
+      // 设置方法名称
+      String className = joinPoint.getTarget().getClass().getName();
+      String methodName = joinPoint.getSignature().getName();
+      operLog.setMethod(className + "." + methodName + "()");
+      // 设置请求方法
+      operLog.setRequestMethod(ServeletUtils.getReqeust().getMethod());
+      // 处理设置注解上的参数
+     	getControllerMethodDescription(controllerLog, operLog);
+      // 保存数据库
+      AsyncManager.me().execute(AsyncFactory.recordOper(operLog));
+    }catch( Exception exp) {
+      // 记录本地异常日志
+      log.error("----前置通知异常------");
+      log.error("异常信息:{}", exp.getMessage());
+      exp.printStackTrace();
+    }
+  }
+  
+  
+  
+  /**
+   * 获取注解中对方法的描述信息，用于Controller层注解
+   * 
+   * @param log 日志
+   * @param operLog 操作日志
+   * @throws Exception
+    */
+  public void getControllerMethodDescription(Log log, OperLog operLog) throws Exception {
+    // 设置action动作
+    operLog.setBusinessType(log.businessType().ordinal());
+    // 设置标题
+    operLog.setTitle(log.title());
+    // 设置操作人类别
+    operLog.setOperatorType(log.operatorType().ordinal());
+    // 是否需要保存request, 参数和值
+    if(log.isSaveReuqestData()) {
+      // 获取参数信息，传入到数据库中
+      setRequestValue(operLog);
+    }
+  }
+  
+  /**
+   * 获取请求的参数，放到log中
+   * @param operLog
+   * @param request
+   */
+  private void setRequestValue(OperLog operLog) {
+    Map<String, String>[] map = ServletUtils.getRequest().getParameterMap();
+    String params = JSONObject.toJSONString(map);
+    operLog.setOperParam(StringUtils.substring(params, 0, 2000));
+  }
+  
+  
+  /**
+   * 是否存在注解，如果存在就获取
+   */
+  private Log getAnnotationsLog(JoinPoint joinPoint) throws Exception {
+    Signature signature = joinPoint.getSignature();
+    MehtodSignature methodSignature = (MethodSignature) signature;
+    Method method = methodSignature.getMethod();
+    
+    if(method != null) {
+      return methodgetAnnotation(Log.class);
+    }
+    return null;
+  }
+}
+```
+
+
+
+* 使用@Log注解
+
+
+
+示例：每对“部门”进行操作就会产生一条操作日志存入数据库。
+
+```java
+@Controller
+@RequestMapping("/system/dept")
+public class DeptController extends BashController {
+  private String preFix = "system/dept";
+  
+  @Autowired
+  private IDeptService deptService;
+  
+  /**
+   * 新增保存部门
+   */
+  @Log(title = "部门管理", businessType = BusinessType.INSERT)
+  @RequirePermission("system:dept:add")
+  @PostMapping("/add")
+  @ResponseBody
+  public AjaxResult addSave(@Validated Dept dept) {
+    if(UserConstants.DEPT_NAME_NOT_UNIQUE.equals(deptService.checkDeptNameUnique(dept))) {
+      return error("新增部门" + dept.getDeptName() + "失败，部门名称已存在");
+    }
+    return toAjax(deptService.insertDept(dept));
+  }
+  
+  
+  /**
+   * 保存
+   */
+  @Log(title = "部门管理", businessType = BusinessType.UPDATE)
+  @RequiresPermissions("system:dept:edit")
+  @PostMapping("/edit")
+  @ResponseBody
+  public AjaxResult editSave(@Validate Dept dept) {
+    if(UserConstants.DEPT_NAME_NOT_UNIQUE.equals(deptService.checkDeptNameUnique(dept))) {
+      return error("修改部门" + dept.getDeptName() + "失败，部门名称已存在");
+      
+    }else if(detp.getParentId().equals(dept.getDeptId())) {
+      return error("修改部门" + dept.getDeptName() + "上级部门不能是自己")
+    }
+    return toAjax(deptServivce.updateDept(dept));
+  }
+  
+  /**
+   * 删除
+   */
+  @Log(title = "部门管理", businessType = BusinessType.DELETE)
+  @RequiresPermission("system:dept:remove")
+  @GetMapping("/remove/{deptId}")
+  @ResponseBody
+  public AjaxResult remove(@PathVariable("deptId") Long deptId) {
+    if(deptService.selectDeptCount(deptId) > 0) {
+      return AjaxResult.warn("存在下级部门，不允许删除");
+    }
+    if(deptService.checkDeptExistUser(deptId)) {
+      return AjaxResult.warn("部门存在用户，不允许删除");
+    }
+    return toAjax(deptService.deleteDeptById(deptId));
+  }
+}
+```
+
+
+
+----------------------------------------
+
+
+
+#### Java反射机制详解
+
+#### 反射基础
+
+RTTI（Run-Time Type Identification） 运行时类别识别.作用：在运行时识别一个对象的类型和类的信息。主要有两种方式：一种是传统的RTTI。它假定我们在编译时已经知道了 所有的类型；另一种是“反射”机制，它允许我们在运行时发现和使用类的信息。
+
+反射就是把Java类中的各个成分映射成一个个的Java对象
+
+例如：一个类有： 成员变量、方法、构造方法、包等等信息。利用发射技术可以对一个类进行剖析，把各个组成部分映射成一个个对象。
+
+> 理解Class类，以及类的加载机制；然后基于此通过反射获取Class类以及类中的成员变量、方法、构造方法等。
+
+
+
+#### Class类
+
+*  Class类也是类的一种，与class关键字是不一样的。
+* 手动编写的类编译后会产生一个Class对象，其表示的是创建的类的类型信息，而这个Class对象保存在同名.class的文件中（字节码文件）
+* 每个通过关键字class标识的类，在内存有且只有一个与之对应的Class对象来描述其类型信息，无论创建多少个实例对象，其依据的都是一个Class对象。
+* Class类只存私有构造函数，因此对应Class对象只能有JVM创建和加载
+* Class类的对象作用是运行时提供或获得某个对象的类型信息，
+
+
+
+#### 类加载
+
+1.类加载机制的流程
+
+![img](https://www.pdai.tech/images/jvm/java_jvm_classload_2.png)
+
+2，类的加载
+
+![img](https://www.pdai.tech/images/java/java-basic-reflection-3.png)
+
+#### 反射的使用
+
+> 基于此可以通过反射获取Class类对象以及类中的成员变量、方法、构造方法等
+
+
+
+
+
+#### Class类对象的获取
+
+在类加载的时候，jvm会创建一个class对象
+
+class对象是可以说反射中最常用，获取class对象的方式主要有三种
+
+* 根据类名： 类名.class
+* 根据对象： 对象.getClass()
+* 根据全限定类名： Class.forName(全限定类名)
+
+```java
+    public void classTest() throws Exception {
+        // 获取Class对象的三种方式
+        logger.info("根据类名:  \t" + User.class);
+        logger.info("根据对象:  \t" + new User().getClass());
+        logger.info("根据全限定类名:\t" + Class.forName("com.test.User"));
+        // 常用的方法
+        logger.info("获取全限定类名:\t" + userClass.getName());
+        logger.info("获取类名:\t" + userClass.getSimpleName());
+        logger.info("实例化:\t" + userClass.newInstance());
+    }
+
+```
+
+
+
+#### Constructor类及其用法
+
+> Constructor类存在于反射包中，反映的是Class对象所表示的类的构造方法。
+
+获取Constructor对象是通过Class类中的方法获取的，Class类与Constructor相关方法如下：
+
+* forName(String className) 
+  * 返回带有给定字符串名的类或接口相关联的Class对象。 `static Class<?>`
+* getConstructor(Class<?>...parameterTypes) 
+  * 返回指定参数类型、具有public访问权限的构造函数对象` Constructor`
+* getConstructors()
+  * 返回所有具有public访问权限的构造函数的Constructore对象数组`Constructor<?>[]`
+* getDeclaredConstructor(Class<?> ... parameterTypes)
+  * 返回指定参数类型、所有声明的（包括private）构造函数对象`Constructor`
+* getDeclaredConstructors()
+  * 返回所有声明的(包括private)构造函数对象`Constructor<?>[]`
+* newInstance()
+  * 调用无参构造器创建此Class对象所表示一个类的一个新实例 `T`
+
+
+
+以下是Constructor对象的使用
+
+```java
+
+
+public class ConstructionTest implements Serializable {
+  public static void main(String[] args) throws Exception {
+    Class<?> clazz = null;
+    
+    // 获取Class对象的引用
+    clazz = CLass.forName("com.example.javabase.User");
+    
+    // 第一种，实例化默认构造方法，User必须无参构造，否则将抛异常
+    User user = (User) clazz.newInstance();
+    user.setAge(20);
+    user.setName("Jack");
+    System.out.prinln(user);
+    
+    // 第二种，获取带String参数的public构造函数
+    Constructor cs1 = claszz.getConstructor(String.class);
+    // 创建User
+    User user1 = (User) cs1.newInstance("hi");
+    user1.setAge(22);
+    System.out.println(user1.toString());
+    
+    // 第三种， 取得指定带int和String参数构造函数，该方法是私有构造private
+    Constructor cs2 = clazz.getDeclaredConstructor(int.class, String.class);
+    // 由于是private需要设置才能访问；
+    cs2.setAccessible(true);
+    // 创建User对象
+    User user2 = (User) cs2.newInstance(25, "Tom");
+    System.out.println(user2.toString());
+    
+    
+    // 第三种 获取所有构造包含private
+    Constructor<?> cons[] = clazz.getDeclaredConstructors();
+    // 查看每个构造方法需要的参数
+    for(int i = 0; i< cons.lenth; i++) {
+      // 获取构造函数参数类型
+      Class<?> classs[] = cons[i].getParameterTypes();
+      // 构造函数
+      // cons[i].toString()
+      // 参数类型 
+      // i
+      for(int j = 0; j < clazzs.length; j++) {
+        if(j == clazzs.length - 1)
+          System.out.println(clazzs[j].getName())
+         else
+           System.out.println(clazzs[j].getName() + ",")
+      }
+      System.out.println("")
+    }
+  }
+}
+
+
+
+class User {
+  private int age;
+  private String name;
+  public User() {
+    super();
+  }
+  public User(String name) {
+    super();
+    this.name = name;
+  }
+  
+  /**
+   * 私有构造
+   * @param age
+   * @param name
+   */
+  private User(int age, String name) {
+    super();
+    this.age = age;
+    this.name = name;
+  }
+  public int getAge() {
+    return age;
+  }
+  public void setAge(int age) {
+    this.age = age;
+  }
+  public String getName() {
+    return name;
+  }
+
+  public void setName(String name) {
+    this.name = name;
+  }
+  @Override
+  public String toString() {
+    return "User{" +
+      "age=" + age +
+      ", name='" + name + '\'' +
+      '}';
+  }
+}
+```
+
+
+
+##### 关于Constructor类本身一些常用的方法
+
+* getDeclaringClass() 
+  * 返回Class对象，该对象表示声明由此Constructor对象表示的构造方法的类，其实就是返回真实类型（不包含参数） `Class`
+* getGenericParameterTypes()
+  * 按照声明顺序返回一组Type对象，返回的就是Constructor对象构造函数的形参类型。`Type[]`
+* getName() 
+  * 以字符串形式返回有次构造方法的名称`String`
+* getParameterTypes()
+  * 按照声明顺序返回一组Class对象，即返回Constructor对象所表示构造方法的形参类型`Class<?>[]`
+* newInstance(Object initargs) 
+  * 使用此Constructor对象表示的构造函数来创建新实例`T`
+* toGenericsString（）
+  * 返回描述此Constructor的字符串，其中包括类型参数 `String`
+
+
+
+#### Filed类及其用法
+
+> Filed提供有关类或接口的单个字段的信息，以及对它的动态访问权限。反射的字段可能是一个类（静态）字段或实例字段
+
+可以通过Class类提供的方法来获取代表字段信息的Field对象，Class类与Filed对象方法如下：
+
+* getDeclaredField(String name) 
+  * 获取指定name名称的（包含private修饰的）字段，不包括继承的字段`Field`
+* getDeclaredFields()
+  * 获取Class对象所表示的类或接口的所有（包含private修饰的）字段，不包括继承的字段`Field[]`
+* getField(String name) 
+  * 获取指定name名称，具有public修饰的字段，包含继承字段。`Filed`
+* getFields()
+  * 获取修饰符为public的字段，包含继承字段。`Field[]`
+
+```java
+public class ReflectField {
+  public static void main(String[] args) throws ClassNotFoundException, NoSuchFieldException {
+    Class<?> clazz = Class.forName("reflect.Student");
+    // 第一种： 获取指定字段名称的Filed类，注意字段修饰符必须为public而且存在该字段
+    // 否则抛出NoSuchFieldException
+    Field field = clazz.getField("age");
+    System.out.println(field)
+      
+      // 第二种 获取所有修饰符为public的字段，包含父类字段，注意修饰符为public才会获取
+     Field fields[] = clazz.getFields();
+    for(Field f: fields) {
+     	System.out.println(f.getDeclaringClass());
+    }
+    
+    // 第三种 获取当前类所字段（包含private）注意不包含父类字段
+    Field fields2[] = clazz.getDeclaredFields();
+    for(Field f: fields) {
+      System.out.println(f.getDeclaringClass());
+    }
+    
+    // 第四种 获取指定字段名称的Field类，可以是任意修饰符的自动，注意不包含父类的字段
+    Field field2 = clazz.getDeclaredField("desc");
+    System.out.println(field2)
+  }
+  /**
+      输出结果: 
+     field:public int reflect.Person.age
+     f:public java.lang.String reflect.Student.desc
+     f:public int reflect.Person.age
+     f:public java.lang.String reflect.Person.name
+
+     ================getDeclaredFields====================
+     f2:public java.lang.String reflect.Student.desc
+     f2:private int reflect.Student.score
+     field2:public java.lang.String reflect.Student.desc
+     */
+
+} 
+```
+
+
+
+
+
+#### Method类及其用法
+
+> Method提供了关于类或接口上单独某个方法（以及如何访问该方法）的信息，所反映的方法可能是类方法或实例方法（包括抽象方法）
+
+
+
+* getDeclaredMethod(String name, Class<?> ... parameterTypes)
+  * 返回一个指定参数的Method对象，该对象反映此Class对象所表示的类或接口的指定已声明方法`Method`
+* getDeclaredMethods()
+  * 返回Method对象的一个数组，这些对象反映此Class对象表示的类或接口声明的所有方法，包括公共、保护、默认（包）访问和私有方法，但不包括继承的方法。`Method[]`
+* getMethod(String name, Class<?> ...parameterTypes)
+  * 返回一个Method对象，它反映此Class对象所表示的类或接口的指定公共成员方法。`Method`
+* getMethods()
+  * 返回一个包含某些Method对象的数组，这些对象反映此Class对象所表示的类或接口(包括那些由该类或接口声明以及从超接口即成的那些类或接口)的公共成员方法
+
+```java
+public class ReflectMethod {
+  public static void main(String[] args) throws ClassNotFoundException, NoSuchMethodException {
+    Class clazz = Class.forName("reflect.Circle");
+    
+    // 第一种：根据参数获取public的Method，包含继承自父类的方法
+    Method method = clazz.getMethod("draw", int.class, String.class)
+      
+    System.out.println(methods);
+    
+    // 第二种：获取所有public的方法
+    Method[] methods = clazz.getMethods();
+    for(Method m: methods) {
+      System.out.println(m)
+    }
+    
+    // 第三种： 获取当前类的方法包含private, 该方法无法获取继承父类的method
+    Method method1 = clazz.getDeclaredMethod("drawCircle")
+    System.out.println(methods1)
+      
+      // 第四种
+      Method[] methods1 = clazz.getDeclaredMethods();
+    for(Method m: methods1) {
+      System.out.println(m)
+    }
+  }
+}
+```
 
