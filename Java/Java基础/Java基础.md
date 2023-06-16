@@ -1747,3 +1747,104 @@ public class ReflectMethod {
 }
 ```
 
+
+
+
+
+#### 反射机制执行的流程
+
+#### 反射获取类实例
+
+首先调用java.lang.Class的静态方法，获取类信息
+
+```java
+@CallerSensitive
+public static Class<?> forName(String className) throws ClassNotFoundException {
+  // 先通过反射，获取调用进来的类信息，从而获取当前的classLoader
+  
+  Class<?> caller = Reflection.getCallerClass();
+  // 调用native方法进行获取class信息
+  return forName(className, true, ClassLoader.getClassLoader(caller), caller);
+}
+```
+
+
+
+forName()反射获取类信息，并没有将实现留给java,而是交给了jvm去加载。
+
+主要是先获取了ClassLoader,然后调用native方法，获取信息，加载类则是回调java.lang.ClassLoader
+
+最后，jvm又会回调ClassLoader进行类加载。
+
+
+
+后续 略。。。。。
+
+
+
+#### Java常用机制-SPI机制详解
+
+#### 什么是SPI机制
+
+SPI（Service Provider Interface），是JDK内置的一种，服务提供发现机制，可以用来启用框架扩展，替换组件，主要是被框架的开发人员使用。Java中SPI机制主要思想是将装配的控制权移到程序之外，在模块化设计中这个机制尤其重要，其中核心思想就是 **解耦**
+
+调用方，调用标准服务接口，然后本地服务发现加载服务。就可以使用服务方提供的各个实现类。
+
+详细过程是:
+
+* 当服务的提供者提供了一种接口的实现后，需要在classpath下，`META-INF/services/`，目录里创建了一个服务接口命名的文件，这个文件里的内容就是这个接口具体的实现类，当其他的程序需要这个服务的时候，就可以通过查找这个jar包，的`META-INF/services/`中的配置文件，配置文件中有接口的具体实现类名，可以根据这个类名进行加载实例化，就可以使用该服务了。JDK中查找服务的实现的工具类是:`java.util.SerivceLoader`
+
+
+
+#### SPI机制简单示例
+
+需求：需要一个内容搜索接口，搜索的实现可能是基于文件系统的搜索，也可能是基于数据库的搜索
+
+* 先定义好接口
+
+```java
+public interface Search {
+  public List<String> searchDoc(String keyword);
+}
+```
+
+* 文件搜索实现
+
+```java
+public class FileSearch implements Search {
+  @Override
+  public List<String> searchDoc(String keyword) {
+    System.out.println("文件搜索" + keyword);
+    return null;
+  }
+}
+```
+
+* 数据库搜索实现
+
+```java
+public class DatabaseSearch implements Search
+  @Overrid
+  public List<String> searchDoc(String keyword) {
+  	System.out.println("数据搜索" + keyword);
+    return null;
+}
+```
+
+* resources接下来可以在resources下新建META-INF/services/目录，然后新建接口全限定名的文件： `com.cainiao.learn.search`,里面加上需要用到的实现类
+
+* 测试方法
+
+```java
+public class TestCase {
+  public static void main(String[] args) {
+    ServiceLoader<Search> s = ServiceLoader.load(Search.class);
+    Iterator<Search> iterator = s.iterator();
+    while(iterator.hasNext()) {
+      Search search = iterator.next();
+      search.serchDoc("hello world")
+    }
+  }
+}
+```
+
