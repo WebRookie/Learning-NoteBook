@@ -736,6 +736,282 @@ filter方法通过传入限定条件对Optional实例的值进行过滤。
 
 
 
+### Java - 8 默认方法
+
+> * 为什么会出现默认方法？
+> * 接口中出现默认方法，且类可以实现多接口的，那和抽象类有啥区别？
+> * 多重实现的默认方法冲突怎么办？
+
+
+
+#### 什么是默认方法，为什么要有默认方法？
+
+```java
+ public interface A {
+   defaullt void foo() {
+     System.println("Calling A.foo()");
+   }
+ }
+
+public class Clazz implements A {
+  public static void main(String[] args) {
+    Class clazz = new Clazz();
+    clazz.foo(); // 调用A.foo()
+  }
+}
+```
+
+
+
+#### 什么是默认方法？
+
+简单的说，就是接口可以有实现方法，而且不需要实现其方法，只需要在方法名前价格default关键字即可。
+
+
+
+#### 为什么需要默认方法？
+
+首先，之前的接口是一个双刃剑，好处是面向抽象而不是面向具体编程，缺陷是，当需要修改接口的时候，需要修改全部实现该接口的类，目前的Java8之前的集合框架没有foreach方法，通常能想到的解决办法是在JDK里给相关的接口添加新的方法及实现，然而对于已发布的版本，是没法给接口添加新方法的同时不影响已有的实现，所以引进的默认方法，是为了解决接口的修改与现有实现的不兼容问题。
+
+
+
+#### Java8抽象类与接口对比
+
+
+|                            相同点                            |                            不同点                            |
+| :----------------------------------------------------------: | :----------------------------------------------------------: |
+|                         都是抽象类型                         | 抽象类不可以多重继承，接口可以（无论是多重类型继承还是多重行为继承） |
+|               都可以有实现方法（以前接口不行）               | 抽象类和接口所反应出的设计理念不同。其实抽象类表示的是“is- a”关系，接口表示的是“like - a”关系 |
+| 都可以不需要实现类或继承者去实现所有方法，（现在接口中默认方法不需要实现者实现） | 接口中定义的变量默认是public static final型，且必须给其初值，所以实现类中不能改变其值；抽象类中变量默认是friendly型，其值可以在子类中重新定义，也可以重新赋值 |
+
+* friendly型： 假设一个类、类属变量及方法不以这三种（public, protected, private)修饰符来修饰，它就是friendly类型。那么包内不论什么类都能访问它。
+
+
+
+#### 多重继承的冲突
+
+由于同一个方法可以从不同接口引入，自然而然就会有冲突现象，默认方法判断冲突的规则如下：
+
+1. 一个声明在类里面的方法优先于任何默认方法（classess always win）
+2. 否则，则会优先选取路径最短的。
+
+##### 举例
+
+* Case1
+
+```java
+public interface A{
+	default void aa() {
+		System.out.println("A's aa");
+	}
+}
+public interface B{
+	default void aa() {
+		System.out.println("B's aa");
+	}
+}
+public static class D implements A,B{
+	
+}
+```
+
+报错 Duplicate default methods named aa with the parameters() and () are inherited from the types DocApplication B and DocApplication.A
+
+如果一定要这么写呢。同时实现A,B并且使用A中的aa？
+
+```java
+public static class D implements A,B {
+  @Overrid
+  public void aa() {
+    A.super.aa();
+  }
+}
+```
+
+
+
+* Case 2
+
+```java
+public interface A{
+	default void aa() {
+		System.out.println("A's aa");
+	}
+}
+public interface B{
+	default void aa() {
+		System.out.println("B's aa");
+	}
+}
+public interface C extends A, B{
+	default void aa() {
+		System.out.println("C's aa");
+	}
+}
+public static class D implements A,B,C{
+	
+}
+
+```
+
+输出 C's aa
+
+
+
+* Case 3
+
+```java
+public interface A{
+	default void aa() {
+		System.out.println("A's aa");
+	}
+}
+public interface C extends A{
+	default void aa() {
+		System.out.println("C's aa");
+	}
+}
+public static class D implements C{
+	
+}
+
+```
+
+输出C's aa
+
+
+
+## Java 8 - 类型注解
+
+
+
+> * 可以在哪些地方使用注解？
+> * 什么是类型注解？
+> * 类型注解有什么作用？
+> * 为什么会出现类型注解（JSR 308）?
+
+
+
+#### 什么是类型注解
+
+在Java8之前 注解只能在声明的地方使用，例如：类、方法，属性；
+
+在Java8，注解可以放在任何地方。
+
+
+
+**创建类实例**
+
+```java
+new @Interned MyObjcet()
+  // @Interned 使用此注解修饰类，其子类将默认继承这个元注解
+```
+
+**类型映射**
+
+```java
+myString = (@NonNull String) str;
+// @NonNull 用于注解方法，参数以及变量，指示目标对象不能为null
+// @NonNullApi 包级别注释， 指定参数和方法返回值默认不能为null；
+// @NonNullFields 包级别注释， 用于变量不能为null;
+// @Nullable 可用于注解方法，参数以及变量，指定目标对象可以为null，若是与@NonNullApi和@NonNullFields公用时，则会覆盖。
+```
+
+**implements语句中**
+
+```java
+class unmodifiableList<T> implements @Readonly List<@Readonly T> {...}
+
+```
+
+**Throw exception 声明**
+
+```java
+void monitorTemperature() throws @Critical TemperatureException{ ...}
+```
+
+
+
+需要注意的是，**类型注解只是语法而不是语义，并不会影响Java的编译时间，加载时间，以及运行时间，也就是说，编译成class文件的时候并不包含类型注解**
+
+
+
+## Java 8 - 重复注解
+
+>* jdk8之前对重复注解是怎么做的？
+>* jdk8对重复注解添加了什么支持
+
+
+
+### 什么是重复注解
+
+允许在同一申明类型( 类， 属性， 或方法 ) 的多次使用同一个注解
+
+
+
+####  JDK8之前
+
+java8之前也有重复使用注解的解决方案，但可读性不好。
+
+```java
+public @interface Authority {
+  String role();
+}
+
+public @interface Authorities {
+  Authority[] value();
+}
+
+public class RepeatAnnotationUseOldOversion {
+  @Authorities({@Authority(role="Admin"),@Authority(role="Manager")})
+  public void doSomeThing() {
+    
+  }
+}
+```
+
+用另一个注解来存储重复注解，在使用的时候，用存储注解Authorities来扩展重复注解。
+
+
+
+#### JDk8重复注解
+
+```java
+@Repeatable(Authorities.class)
+public @interface Authority {
+  String role();
+}
+
+public @interface Authorities {
+  Authority[] value();
+}
+
+public class RepeatAnnotationUseNewVersion {
+  
+  @Authority(role="Admin")
+  @Authority(role="Manager")
+  public void doSomeThing(){}
+}
+```
+
+不同的是，创建重复注解Authority时，加上@Repeatable,指向存储注解Authorities，在使用时候，直接可以重复使用Authority注解。
+
+
+
+
+
+## Java 8 - LocalDate / LocalDateTime
+
+### Java8时间和日期
+
+java8仍然沿用了ISO的日历体系，并且与它的前辈不同，java.time包中的类是不可变且线程安全的，新的时间及日期API位于java.time包中，
+
+* Instant - 它代表的是时间戳
+* LocalDate - 不包含具体的日期， 比如 2014-01-14， 可用来存储生日。
+* LocalTime - 它代表的是不含日期的时间。
+* LocalDateTime - 它包含了日期及时间，不过还没有偏移信息或者说明时区。
+* ZonedDateTime - 这是一个包含时区的完整的日期时间，偏移量是UTC/格林威治时间为基准的。
+
 
 
 
