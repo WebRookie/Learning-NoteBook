@@ -315,3 +315,485 @@ AOP最早是AOP联盟的组织提出的，指定的一套规范，spring将AOP�
 
 AspectJ是一个Java实现的AOP框架，它能够对java代码进行AOP编译（一般在编译期进行），让java代码具有AspectJ的AOP功能（当然需要特殊的编译器）
 
+
+
+#### AOP的配置方式
+
+> Spring AOP支持XML模式和基于AspectJ注解的两种配置方式
+
+
+
+#### XML Scheme配置方式
+
+Spring提供了使用“aop”命名空间来定义一个切面。示例如下：
+
+* 定义目标类
+
+```java
+
+public class AopDemoServiceImpl {
+
+    public void doMethod1() {
+        System.out.println("AopDemoServiceImpl.doMethod1()");
+    }
+
+    public String doMethod2() {
+        System.out.println("AopDemoServiceImpl.doMethod2()");
+        return "hello world";
+    }
+
+    public String doMethod3() throws Exception {
+        System.out.println("AopDemoServiceImpl.doMethod3()");
+        throw new Exception("some exception");
+    }
+}
+```
+
+* 定义切面类
+
+```java
+public class LogAspect {
+  
+  /**
+   * 环绕通知
+   * 
+   * @param pjp 
+   * @retrun obj
+   **/
+  public Object doAround(ProceedingJoinPoint pjp)  throws Throwable {
+    System.out.println("----");
+    System.out.println("环绕通知：进入方法");
+    Object o = pjp.proceed();
+    System.out.println("环绕通知：退出方法");
+    return o;
+  }
+  
+  /**
+   * 前置通知
+   */
+  public void deBefore() {
+    System.out.println("前置通知")
+  }
+  
+  /**
+   * 后置通知
+   */
+  public void doAfterReturning(String result) {
+    System.out.println("后置通知， 返回值：" + result);
+  }
+  
+  /**
+   * 异常通知
+   */
+  public void doAfterThrowing(Exception e) {
+    System.out.println("异常通知，异常：" + e.getMessage());
+  }
+  
+  /**
+   * 最终通知
+   */
+  public void doAfter() {
+    	System.out.println("最终通知");
+  }
+}
+```
+
+* XML配置AOP
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:aop="http://www.springframework.org/schema/aop"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+ http://www.springframework.org/schema/beans/spring-beans.xsd
+ http://www.springframework.org/schema/aop
+ http://www.springframework.org/schema/aop/spring-aop.xsd
+ http://www.springframework.org/schema/context
+ http://www.springframework.org/schema/context/spring-context.xsd
+">
+
+    <context:component-scan base-package="tech.pdai.springframework" />
+
+    <aop:aspectj-autoproxy/>
+
+    <!-- 目标类 -->
+    <bean id="demoService" class="tech.pdai.springframework.service.AopDemoServiceImpl">
+        <!-- configure properties of bean here as normal -->
+    </bean>
+
+    <!-- 切面 -->
+    <bean id="logAspect" class="tech.pdai.springframework.aspect.LogAspect">
+        <!-- configure properties of aspect here as normal -->
+    </bean>
+
+    <aop:config>
+        <!-- 配置切面 -->
+        <aop:aspect ref="logAspect">
+            <!-- 配置切入点 -->
+            <aop:pointcut id="pointCutMethod" expression="execution(* tech.pdai.springframework.service.*.*(..))"/>
+            <!-- 环绕通知 -->
+            <aop:around method="doAround" pointcut-ref="pointCutMethod"/>
+            <!-- 前置通知 -->
+            <aop:before method="doBefore" pointcut-ref="pointCutMethod"/>
+            <!-- 后置通知；returning属性：用于设置后置通知的第二个参数的名称，类型是Object -->
+            <aop:after-returning method="doAfterReturning" pointcut-ref="pointCutMethod" returning="result"/>
+            <!-- 异常通知：如果没有异常，将不会执行增强；throwing属性：用于设置通知第二个参数的的名称、类型-->
+            <aop:after-throwing method="doAfterThrowing" pointcut-ref="pointCutMethod" throwing="e"/>
+            <!-- 最终通知 -->
+            <aop:after method="doAfter" pointcut-ref="pointCutMethod"/>
+        </aop:aspect>
+    </aop:config>
+
+    <!-- more bean definitions for data access objects go here -->
+</beans>
+
+```
+
+
+
+* 测试类
+
+```java
+public static void main(String[] args) {
+  // create and configure beans
+  ApplicationContext context = new ClassPathXmlApplicationContext("apsect.xml");
+  
+  // retrieve configured instance
+  AopDemoServiceImpl service = context.getBean("demoService", AopDemoServiceImpl.class);
+  
+  // use configured instance
+  service.doMethod1();
+  service.doMethod2();
+  try {
+    service.doMethod3();
+  }catch (Exception e) {
+    // e.printStackTrace();
+  }
+}
+```
+
+* 输出结果
+
+```
+-----------------------
+环绕通知: 进入方法
+前置通知
+AopDemoServiceImpl.doMethod1()
+环绕通知: 退出方法
+最终通知
+-----------------------
+环绕通知: 进入方法
+前置通知
+AopDemoServiceImpl.doMethod2()
+环绕通知: 退出方法
+最终通知
+后置通知, 返回值: hello world
+-----------------------
+环绕通知: 进入方法
+前置通知
+AopDemoServiceImpl.doMethod3()
+最终通知
+异常通知, 异常: some exception
+------
+
+```
+
+
+
+#### AspectJ注解方式
+
+基于XML的声明式ApectJ存在一些不足，需要在Spring配置文件配置大量的代码信息，为了解决这个问题，spring使用了@AspectJ框架为AOP的实现提供了一套注解
+
+| - 注解名称 -    | - 解释 -                                                     |
+| --------------- | ------------------------------------------------------------ |
+| @Aspcet         | 用来定义一个切面                                             |
+| @pointcut       | 用于定义切入点表达式，在使用时还需要定义一个包含名字和人任意参数的方法签名来表示切入点名称，这个方法签名就是一个返回值为void，且方法体为空的普通方法 |
+| @Before         | 用于定义前置通知，相当于@BeforeAdvice，在使用时，通常需要一个value属性值，该属性值用于指定一个切入点表达式（可以是已有的的切入点，也可以直接定义切入点表达式） |
+| @AfterReturning | 用于定义后置通知，相当于AfterReturningAdivce,在使用时可以定义pointcut / value和returning属性，其中 pointcut / value 这两个属性的作用一样，都是用于指定切入点表达式。 |
+| @Around         | 用于定义环绕通知，相当于MethodInterceptor。在使用时需要指定一个value属性，该属性用于指定该通知被植入的切入点 |
+| @After-Throwing | 用于定义异常通知来处理程序中为处理的异常，相当于ThrowAdvice。在使用时可指定pointcut / value 和throwing属性。其中pointcut / value用指定切入点表达式而throwing属性值用于指定一个形参名来表示Advice方法中可定义与此同名的形参，该形参可用于访问目标方法抛出的异常。 |
+| @After          | 用于定义最终final通知，不管是否异常，该通知都会执行，使用时需要指定一个value属性，该属性用于指定该通知被植入的切入点。 |
+| @DeclareParents | 用于定义引介通知，相当于IntroductionInterceptor              |
+|                 |                                                              |
+
+>Spring AOP 的实现是动态织入，动态织入的方式是在运行时动态的要将增强的代码织入到目标类中，这样往往是通过动态代理技术完成的；**如Java JDK的动态代理（Proxy，底层通过反射实现）或者CGLB的动态代理（底层通过继承实现）**，Spring AOP采用的就是基于运行时增强的代理技术。
+>
+>* 基于JDK代理的例子
+>* 基于Cglib代理的例子
+
+
+
+##### 接口使用JDK代理
+
+* 定义接口
+
+```java
+	public interface IJdkProxyService {
+    void deMethod1();
+    
+    String doMethod2();
+    
+    String doMethod3() throws Exception;
+  }
+```
+
+* 实现类
+
+```java
+@service
+public class JdkProxyDemoServiceImpl implements IJdkProxyService {
+  @Override
+  public void doMethod1() {
+    System.out.println("JdkProxyServiceImpl.doMetho1()");
+  }
+  
+  @Override
+  public String doMethod2() {
+    System.out.println("JdkProxyServiceImpl.doMethod2()");
+  }
+  
+  @Override
+  public String doMethod3() {
+    System.out.println("JdkProxyServiceImpl.doMethod3()");
+    throw new Exception("mock some exception");
+  }
+}
+```
+
+* 定义切面
+
+```java
+@EnableAspectJAutoProxy
+@Component
+@Aspect
+public class LogAspect {
+  
+  // define point cut
+  @Pointcut("execution(*com.rookie.springframework.service.*.*(..))")
+  private void pointCutMethod() {
+    
+  }
+  
+  // 环绕通知
+  @Around("pointCutMethod()")
+  public Object doAround(ProceedingJoinPoint pjp) throws Throwable {
+    System.out.println("-------");
+    System.out.println("环绕通知： 进入方法");
+    Object o = pjp.proceed();
+    System.out.println("环绕通知： 退出方法");
+    return o;
+  }
+  
+  // 前置通知
+  @Before("pointCutMethod()")
+  public void doBefore() {
+    System.out.println("前置通知");
+  }
+  
+  
+  // 后置通知
+  @AfterReturning(pointcut = "pointCutMethod()")
+  public void doAfterReturning(String result) {
+    System.out.println("后置通知，返回值：" + result);
+  }
+  
+  // 异常通知
+  @AfterThrowing(pointcut = "pointCutMethod()", throwing = "e")
+  public void doAfterThrowing(Exception e) {
+    System.out.println("异常通知，异常：" + e.getMessage());
+  }
+  
+  // 最终通知
+  @After("pointCutMethod()")
+  public void doAfter() {
+    System.out.println("最终通知");
+  }
+  
+  
+  
+}
+```
+
+* 输出
+
+```
+-----------------------
+环绕通知: 进入方法
+前置通知
+JdkProxyServiceImpl.doMethod1()
+最终通知
+环绕通知: 退出方法
+-----------------------
+环绕通知: 进入方法
+前置通知
+JdkProxyServiceImpl.doMethod2()
+后置通知, 返回值: hello world
+最终通知
+环绕通知: 退出方法
+-----------------------
+环绕通知: 进入方法
+前置通知
+JdkProxyServiceImpl.doMethod3()
+异常通知, 异常: some exception
+最终通知
+------
+```
+
+
+
+
+
+#### 非接口使用Cglib代理
+
+* 类定义
+
+```java
+@Service
+public class CglibProxyDemoServiceImpl {
+  public void doMethod1() {
+    System.out.println("CglibProxyDemoServiceImpl.doMethod1()");
+  }
+  
+  public String doMethod2() {
+    System.out.println("CglibProxyDemoServiceImpl.doMethod2()");
+  }
+  
+
+  public String doMethod3() {
+    System.out.println("CglibProxyDemoServiceImpl.doMethod3()");
+    throw new Exception("mock some exception");
+  }
+}
+```
+
+* 切面定义
+
+和上面相同
+
+* 输出
+
+```
+-----------------------
+环绕通知: 进入方法
+前置通知
+CglibProxyDemoServiceImpl.doMethod1()
+最终通知
+环绕通知: 退出方法
+-----------------------
+环绕通知: 进入方法
+前置通知
+CglibProxyDemoServiceImpl.doMethod2()
+后置通知, 返回值: hello world
+最终通知
+环绕通知: 退出方法
+-----------------------
+环绕通知: 进入方法
+前置通知
+CglibProxyDemoServiceImpl.doMethod3()
+异常通知, 异常: some exception
+最终通知
+------
+
+```
+
+
+
+### AOP 使用问题小结
+
+#### 切入点（pointcut）的申明规则？
+
+SpringAOP用户可能回家经常使用execution切入点指示符。执行表达式如下
+
+```java
+execution（modifiers-pattern? ret-type-pattern declaring-type-pattern? name-pattern（param-pattern） throws-pattern?）
+
+```
+
+* ret-type-pattern 返回类型模式。name-pattern名字模式和param-pattern参数模式是必选的。其他部分都是可选的。返回类型模式决定了方法的返回类型必须依次匹配一个连接点。你会使用的最频繁的返回类型模式是`*` ,**它代表了匹配任意的返回类型**。
+* declaring-type-pattern, 一个全限定的类型名将只会匹配返回给定类型的方法。
+* name-pattern 名字模式匹配的是方法名，你可以使用`*`通配符作为所有或者部分命名模式
+* param-pattern 参数模式有些复杂：（）匹配了一个不接受任何参数的方法，而（..）匹配了一个接受任意数量参数的方法（零或者更多）模式（）匹配了一个接受一个任何类型参数的方法。模式（，String）匹配了一个接受两个参数的方法。第一可以是任意类型的，第二个则必须是String类型。
+
+对应以上的例子
+
+![img](https://www.pdai.tech/images/spring/springframework/spring-framework-aop-7.png)
+
+
+
+下面是一些通用切入点表达式的例子
+
+```java
+// 任意公共方法的执行
+execution (public * * (..))
+  
+// 任何一个名字以“set”开始的方法的执行
+  execution(* set* (..))
+
+  
+// AccountService接口定义的任意方法的执行；
+execution(* com.xyz.service.AccountService.*(..))
+  
+  
+// 在service包中定义的任意方法的执行
+execution (* com.xtz.service.*.* (..))
+  
+// 在service包或其子包中定义的任意方法的执行；
+execution( * com.xyz.service..*.*(..))
+  
+  
+// 在service包中的任意连接点（在Spring AOP中只是方法执行）
+within (com.xyz.service.*)
+  
+// 在service包或其子包中的任意连接点（在Spring AOP中只是方法的执行）
+ within (com.xyz.service..*)
+
+// 实现了AccountService接口的代理对象的任意连接点（在Spring AOP中只是方法执行）
+this (com.xyz.service.AccountService) // ‘this’在绑定表单中更加常用
+
+// 实现AccountService接口的目标对象的任意连接点（在Spring AOP中只是方法的执行）
+target(com.xyz.service.AccountService) // 'target'在绑定表单中更加常用
+
+// 任何一个只接受一个参数，并且运行时所穿入的参数是Seriaizable接口的连接点（在Spring AOP中只是方法的执行）
+arg(java.io.Serializable) // ‘args'在绑定表单中，更加常用
+// 请注意在例子中给出的切入点不同于 execution(* *(java.io.Serializable))： args版本只有在动态运行时候传入参数是Serializable时才匹配，而execution版本在方法签名中声明只有一个 Serializable类型的参数时候匹配。
+
+// 目标对象中有一个@Transactional注解的任意连接点（在Spring AOP中只是方法的执行）
+@target(org.springframework.transcaction.annotation.Transactional) 
+  
+// 任何一个目标对象声明类型有一个@Transactional注解的连接点（在Spring AOP中只是方法执行）
+@within(org.springframework.transaction.annotation.Transactional)
+  
+  
+// 任何一个执行方法有一个@Transactional注解的连接点
+@annotation(org.springframework.transaction.annotation.Transactional)
+  
+  
+// 任何有一个只接受一个参数，并且运行时所穿入的参数类型具有@Classified注解的连接点（在Spring AOP中只是方法执行）
+@args(com.xyz.security.Classified)
+  
+  
+// 任何一个在名为'tradeService'的Spring bean之上的连接点（在Spring AOP中只是方法执行）
+bean(tradeService)
+  
+  
+// 任何一个在名字匹配通配符表达式‘*.Service'的Spring bean之上的连接点（在Spring AOP只是方法执行）
+bean(*Service)
+
+```
+
+此外Spring支持如下三个逻辑运算符来组合切入表达式
+
+```
+&&：要求连接点同时匹配两个切入点表达式
+||：要求连接点匹配任意个切入点表达式
+!:：要求连接点不匹配指定的切入点表达式
+```
+
+
+
+
+
+
+
