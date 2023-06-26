@@ -793,6 +793,92 @@ bean(*Service)
 
 
 
+Spring AOP和。AspectJ之间 的关键区别？
+
+Aspect J可以 做Spring AOP干不了的事，它是AOP编程的完全解决方法，Spring AOP则致力于解决企业级开发中最普遍的AOP（方法织入）
+
+| Spring AOP                                       | Aspect J                                                     |
+| ------------------------------------------------ | ------------------------------------------------------------ |
+| 在纯Java中实现                                   | 使用Java编程语言的扩展实现                                   |
+| 不需要单独的编制过程                             | 除非设置LTW，否则需要Aspect J编译器（ajc）                   |
+| 只能使用运行时织入                               | 运行时织入不可用。支持编译时、编译后和加载时织入             |
+| 功能不强-仅支持方法级编织                        | 更强大 - 可以编织字段、方法、构造函数、静态初始值设定项、最终类 / 方法等... |
+| 只能在Spring容器管理等bean上实现                 | 可以在所有域对象上实现                                       |
+| 仅支持方法执行切入点                             | 支持所有切入点                                               |
+| 代理是由目标对象创建的，并且切面应用在这些代理上 | 在执行应用程序之前（在运行时）前，各方面直接在代码中进行织入 |
+| 比Aspect J 慢                                    | 更好的性能                                                   |
+| 易于学习和应用                                   | 相对于Spring AOP来说更复杂                                   |
+
+
+
+
+
+## Spring基础 - SpringMVC请求流程和案例
+
+
+
+### 什么是MVC
+
+> MVC英文是Model View Controller， 是模型（model） - 视图（view） - 控制器（controller）的缩写，一种软件设计规范，本质也是一种解耦
+
+![img](https://www.pdai.tech/images/spring/springframework/spring-springframework-mvc-4.png)
+
+
+
+* Model （模型） 是应用程序中用于处理应用程序数据逻辑的部分，通常模型对象负责在数据库中存储数据。
+* View （视图） 是应用程序中处理数据显示的部分。通常视图是依据模型数据创建的
+* Controller （控制器）是应用程序中处理中用户交互的部分，通常控制器负责从视图读取数据，控制用户输入，并向模型发送数据。
+
+
+
+### 什么是Spring MVC
+
+> Spring Web MVC 是一种基于Java 的实现了Web MVC 设计模式的请求驱动类型的轻量级Web 框架，即使用了MVC 架 构模式的思想，将 web 层进行职责解耦，基于请求驱动指的就是使用请求-响应模型，框架的目的就是帮助我们简化开 发，Spring Web MVC 也是要简化我们日常Web 开发的。
+>
+> 
+
+> 简单而言，Spring MVC 是Spring Container Core 和AOP等技术基础上，遵循Web MVC规范推出的web开发框架，目的是为了简化Java栈的web开发
+
+
+
+### Spring MVC的请求流程
+
+> Spring Web MVC 框架也是一个基于请求驱动的Web框架，并且也使用了前端控制器模式来进行设计，再根据请求映射 规则分发给相应的页面控制器（动作 / 处理器）进行处理。
+
+
+
+#### 核心架构的具体流程步骤
+
+![img](https://www.pdai.tech/images/spring/springframework/spring-springframework-mvc-5.png)
+
+核心架构的具体流程步骤如下：
+
+1. **用户发送请求 ----> DispatcherServlet**， 前端控制器收到请求后自己不进行处理，而是委托给其他的解析器进行处理，作为统一访问点，进行全局的流程控制；
+2. **DispatcherServlet ----> HandlerMapping** ， HandlerMapping将会把请求映射为Handler ExceptionChain对象 （包含一个Handler处理器（页面控制器）对象、多个HandlerInterceptor 拦截器）对象，通过这种策略模式，很容易添加新的映射策略；
+3. **DispatcherServlet ----> HandlerAdapter**, HandlerAdapter 将会把处理器包装为适配器，从而支持多种类型的处理器，即适配器设计模式的应用，从而很容易支持很多类型的处理器；
+4. HandlerAdapter ----> 处理器功能处理方法的调用， HandlerAdaptor将会根据适配的结果调用真正的处理器的功能处理方法，完成功能处理；并返回一个ModelAndView对象（包含模型数据、逻辑视图名）
+5. ModelAndView的逻辑视图名 ----> ViewResolver， ViewResolver将把逻辑视图名解析为具体的View，通过这种策略模式，很容易更换其他的视图技术；
+6. View -----> 渲染, View会根据传进来的Model模型进行渲染，此处的Model实际是一个Map数据结构，因此很容易支持其他视图技术；
+7. 返回控制权给DispatcherServlet，由DispatcherServlet， 由DispatcherServlet返回响应给用户，到此一个流程结束。
+
+
+
+#### 补充
+
+1. Filter（ServletFilter）
+
+进入Servlet前可以有preFilter，Servlet处理后还可以有postFilter
+
+![img](https://www.pdai.tech/images/spring/springframework/spring-springframework-mvc-8.png)
+
+
+
+2. 对于文件的上传请求？
+
+对于常规请求上述流程是合理的，但是如果是文件的上传请求，那么就不太一样；所以便有了MultipartResolver
+
+
+
 
 
 
